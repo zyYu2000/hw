@@ -215,10 +215,13 @@ module DatapathSingleCycle (
     halt = 1'b0;
     a_cla = 32'h000000000;
     b_cla = 32'h000000000;
+<<<<<<< HEAD
 
     if(insn_ecall) begin
       halt = 1'b1;
     end
+=======
+>>>>>>> dd23e821386856cf554b433411336c5727f074f7
 
     case (insn_opcode)
       OpLui: begin
@@ -356,18 +359,30 @@ module DatapathSingleCycle (
 
     if(insn_bne) begin
       if(rs1!=rs2) begin
+<<<<<<< HEAD
         pcNext = pcCurrent + {{19{imm_b[11]}}, imm_b[11:0], 1'b0};
+=======
+        pcNext = pcCurrent + {{19{imm_b[11]}}, imm_b[11:0], 1'b0};    
+>>>>>>> dd23e821386856cf554b433411336c5727f074f7
       end
     end
 
     if(insn_blt) begin
+<<<<<<< HEAD
       if($signed(rs1) < $signed(rs2)) begin
+=======
+      if(rs1 < $signed(rs2)) begin
+>>>>>>> dd23e821386856cf554b433411336c5727f074f7
         pcNext = pcCurrent + {{19{imm_b[11]}}, imm_b[11:0], 1'b0};    
       end
     end
 
     if(insn_bge) begin
+<<<<<<< HEAD
       if($signed(rs1) >= $signed(rs2)) begin
+=======
+      if(rs1 >= $signed(rs2)) begin
+>>>>>>> dd23e821386856cf554b433411336c5727f074f7
         pcNext = pcCurrent + {{19{imm_b[11]}}, imm_b[11:0], 1'b0};    
       end
     end
@@ -384,6 +399,12 @@ module DatapathSingleCycle (
       end
     end
 
+<<<<<<< HEAD
+=======
+    if(insn_ecall) begin
+      halt = 1'b1;
+    end 
+>>>>>>> dd23e821386856cf554b433411336c5727f074f7
 
   end
     
@@ -409,8 +430,11 @@ module DatapathSingleCycle (
       .we(we_signal),
       .rst(rst)
   );
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> dd23e821386856cf554b433411336c5727f074f7
 
 endmodule
 
