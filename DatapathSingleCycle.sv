@@ -7,7 +7,7 @@
 `define OPCODE_SIZE 6:0
 
 `include "../hw2a/divider_unsigned.sv"
-`include "/home/penn/hw/hw/hw2b/cla.sv"
+`include "../hw2b/cla.sv"
 
 module RegFile (
     input logic [4:0] rd,
@@ -57,6 +57,22 @@ module DatapathSingleCycle (
     output wire [3:0] store_we_to_dmem
 );
 
+    wire [31:0] rd_data_signal;
+    wire [31:0] rs1,rs2;
+    logic we_signal;
+
+    RegFile rf (
+        .rd(insn_rd),
+        .rd_data(rd_data_signal),
+        .rs1(insn_rs1),
+        .rs1_data(rs1),
+        .rs2(insn_rs2),
+        .rs2_data(rs2),
+        .clk(clk),
+        .we(we_signal),
+        .rst(rst)
+    );
+
   // components of the instruction
   wire [6:0] insn_funct7;
   wire [4:0] insn_rs2;
@@ -69,14 +85,15 @@ module DatapathSingleCycle (
   assign {insn_funct7, insn_rs2, insn_rs1, insn_funct3, insn_rd, insn_opcode} = insn_from_imem;
 
   // setup for I, S, B & J type instructions
+
   //U-type
-  wire [19:0] imm_u;
+  wire [31:12] imm_u;
   assign imm_u = insn_from_imem[31:12];
 
   // I - short immediates and loads
   wire [11:0] imm_i;
   assign imm_i = insn_from_imem[31:20];
-  wire [ 4:0] imm_shamt = insn_from_imem[24:20];
+  wire [4:0] imm_shamt = insn_from_imem[24:20];
 
   // S - stores
   wire [11:0] imm_s;
@@ -94,7 +111,7 @@ module DatapathSingleCycle (
   wire [`REG_SIZE] imm_s_sext = {{20{imm_s[11]}}, imm_s[11:0]};
   wire [`REG_SIZE] imm_b_sext = {{19{imm_b[12]}}, imm_b[12:0]};
   wire [`REG_SIZE] imm_j_sext = {{11{imm_j[20]}}, imm_j[20:0]};
-  
+
   // opcodes - see section 19 of RiscV spec
   localparam bit [`OPCODE_SIZE] OpLoad = 7'b00_000_11;
   localparam bit [`OPCODE_SIZE] OpStore = 7'b01_000_11;
@@ -207,210 +224,25 @@ module DatapathSingleCycle (
   end
 
   logic illegal_insn;
-  logic [31:0] sum_output, a_cla, b_cla;
 
   always_comb begin
     illegal_insn = 1'b0;
-    we_signal = 1'b0;
-    halt = 1'b0;
-    a_cla = 32'h000000000;
-    b_cla = 32'h000000000;
-
-    if(insn_ecall) begin
-      halt = 1'b1;
-    end
 
     case (insn_opcode)
       OpLui: begin
         // TODO: start here by implementing lui
-          a_cla = {imm_u[19:0], 12'h000};
-          b_cla = 32'h00000000;
-          we_signal = 1'b1;
+        if (insn_rd != 0) begin
+          rd_data_signal = {imm_u[31:12], 12'h000};
+        end
       end
-      default: begin
-        illegal_insn = 1'b1;
-      end
+
+
+        default: begin
+            illegal_insn = 1'b1;
+        end
     endcase
-    
-    if (insn_addi) begin
-      a_cla = rs1;
-      b_cla = imm_i_sext;
-      we_signal = 1'b1;
-    end
-
-    if(insn_slti) begin
-      a_cla = (rs1 < $signed(imm_i_sext)) ? 32'h00000001 : 32'h00000000;
-      b_cla = 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_sltiu) begin
-      a_cla = (rs1 < $unsigned(imm_i_sext)) ? 32'h00000001 : 32'h00000000;
-      b_cla = 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_xori) begin
-      a_cla = rs1^imm_i_sext;
-      b_cla = 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_ori) begin
-      a_cla = rs1|imm_i_sext;
-      b_cla = 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_andi) begin
-      a_cla = rs1 & imm_i_sext;
-      b_cla = 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_slli) begin
-      a_cla = rs1 << imm_i[4:0];
-      b_cla = 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_srli) begin
-      a_cla = rs1 >> imm_i[4:0];
-      b_cla = 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_srai) begin
-      a_cla = rs1 >>> imm_i[4:0];
-      b_cla = 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_add) begin
-      a_cla = rs1;
-      b_cla = rs2;
-      we_signal = 1'b1;
-    end
-
-    if(insn_sub) begin
-      a_cla = rs1 ;
-      b_cla = ~rs2 + 32'h00000001;
-      we_signal = 1'b1;
-    end
-
-    if(insn_sll) begin
-      a_cla = rs1 << rs2[4:0];
-      b_cla = 32'h00000000;
-      we_signal = 1'b1;
-    end
-    
-    if(insn_slt) begin
-      a_cla = (rs1 < $signed(rs2)) ? 32'h00000001 : 32'h00000000;
-      b_cla = 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_sltu) begin
-      a_cla = (rs1 < $unsigned(rs2)) ? 32'h00000001 : 32'h00000000;
-      b_cla = 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_xor) begin
-      a_cla = rs1 ^ rs2;
-      b_cla = 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_srl) begin
-      a_cla = rs1 >> rs2[4:0];
-      b_cla = 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_sra) begin
-      a_cla = rs1 >>> rs2[4:0];
-      b_cla = 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_or) begin
-      a_cla = rs1 | rs2;
-      b_cla = 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_and) begin
-      a_cla = rs1 & rs2;
-      b_cla = 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    pcNext = pcCurrent + 32'd4;
-
-    if(insn_beq) begin
-      if(rs1==rs2) begin
-        pcNext = pcCurrent + {{19{imm_b[11]}}, imm_b[11:0], 1'b0};
-      end
-    end
-
-    if(insn_bne) begin
-      if(rs1!=rs2) begin
-        pcNext = pcCurrent + {{19{imm_b[11]}}, imm_b[11:0], 1'b0};
-      end
-    end
-
-    if(insn_blt) begin
-      if($signed(rs1) < $signed(rs2)) begin
-        pcNext = pcCurrent + {{19{imm_b[11]}}, imm_b[11:0], 1'b0};    
-      end
-    end
-
-    if(insn_bge) begin
-      if($signed(rs1) >= $signed(rs2)) begin
-        pcNext = pcCurrent + {{19{imm_b[11]}}, imm_b[11:0], 1'b0};    
-      end
-    end
-
-    if(insn_bltu) begin
-      if(rs1 < $unsigned(rs2)) begin
-        pcNext = pcCurrent + {{19{imm_b[11]}}, imm_b[11:0], 1'b0};
-      end
-    end
-
-    if(insn_bgeu) begin
-      if(rs1 >= $unsigned(rs2)) begin
-        pcNext = pcCurrent + {{19{imm_b[11]}}, imm_b[11:0], 1'b0};    
-      end
-    end
-
 
   end
-    
-  logic [31:0] rd_data_signal;
-  logic [31:0] rs1,rs2;
-  logic we_signal;
-
-  cla addi_instance(
-        .a(a_cla),
-        .b(b_cla),
-        .cin(1'b0),
-        .sum(rd_data_signal)
-  );
-
-  RegFile rf (
-      .rd(insn_rd),
-      .rd_data(rd_data_signal),
-      .rs1(insn_rs1),
-      .rs1_data(rs1),
-      .rs2(insn_rs2),
-      .rs2_data(rs2),
-      .clk(clk),
-      .we(we_signal),
-      .rst(rst)
-  );
-
-
 
 endmodule
 
@@ -539,6 +371,5 @@ module RiscvProcessor (
       .load_data_from_dmem(mem_data_loaded_value),
       .halt(halt)
   );
-
 endmodule
 
