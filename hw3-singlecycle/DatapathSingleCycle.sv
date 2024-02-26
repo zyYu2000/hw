@@ -207,7 +207,10 @@ module DatapathSingleCycle (
   end
 
   logic illegal_insn;
-  logic [31:0] sum_output, a_cla, b_cla;
+  logic [31:0] sum_output, a_cla, b_cla,sum_cla;
+  logic [31:0] rd_data_signal;
+  logic [31:0] rs1,rs2;
+  logic we_signal;
 
   always_comb begin
     illegal_insn = 1'b0;
@@ -215,20 +218,18 @@ module DatapathSingleCycle (
     halt = 1'b0;
     a_cla = 32'h000000000;
     b_cla = 32'h000000000;
-<<<<<<< HEAD
-
-    if(insn_ecall) begin
-      halt = 1'b1;
-    end
-=======
->>>>>>> dd23e821386856cf554b433411336c5727f074f7
+    rd_data_signal = 32'h000000000;
+   
 
     case (insn_opcode)
       OpLui: begin
         // TODO: start here by implementing lui
-          a_cla = {imm_u[19:0], 12'h000};
-          b_cla = 32'h00000000;
+          rd_data_signal = {imm_u[19:0], 12'h000};
           we_signal = 1'b1;
+      end
+      OpAuipc: begin
+        we_signal = 1'b1;
+        rd_data_signal = pcCurrent + {imm_u, 12'h0};     //pc + (imm20 << 12)
       end
       default: begin
         illegal_insn = 1'b1;
@@ -239,53 +240,46 @@ module DatapathSingleCycle (
       a_cla = rs1;
       b_cla = imm_i_sext;
       we_signal = 1'b1;
+      rd_data_signal = sum_cla;
     end
 
     if(insn_slti) begin
-      a_cla = (rs1 < $signed(imm_i_sext)) ? 32'h00000001 : 32'h00000000;
-      b_cla = 32'h00000000;
+      rd_data_signal = ($signed(rs1) < $signed(imm_i_sext)) ? 32'h00000001 : 32'h00000000;
       we_signal = 1'b1;
     end
 
     if(insn_sltiu) begin
-      a_cla = (rs1 < $unsigned(imm_i_sext)) ? 32'h00000001 : 32'h00000000;
-      b_cla = 32'h00000000;
+      rd_data_signal = ($unsigned(rs1) < $unsigned(imm_i_sext)) ? 32'h00000001 : 32'h00000000;
       we_signal = 1'b1;
     end
 
     if(insn_xori) begin
-      a_cla = rs1^imm_i_sext;
-      b_cla = 32'h00000000;
+      rd_data_signal = rs1^imm_i_sext;
       we_signal = 1'b1;
     end
 
     if(insn_ori) begin
-      a_cla = rs1|imm_i_sext;
-      b_cla = 32'h00000000;
+      rd_data_signal = rs1|imm_i_sext;
       we_signal = 1'b1;
     end
 
     if(insn_andi) begin
-      a_cla = rs1 & imm_i_sext;
-      b_cla = 32'h00000000;
+      rd_data_signal = rs1 & imm_i_sext;
       we_signal = 1'b1;
     end
 
     if(insn_slli) begin
-      a_cla = rs1 << imm_i[4:0];
-      b_cla = 32'h00000000;
+      rd_data_signal = rs1 << imm_i[4:0];
       we_signal = 1'b1;
     end
 
     if(insn_srli) begin
-      a_cla = rs1 >> imm_i[4:0];
-      b_cla = 32'h00000000;
+      rd_data_signal = rs1 >> imm_i[4:0];
       we_signal = 1'b1;
     end
 
     if(insn_srai) begin
-      a_cla = rs1 >>> imm_i[4:0];
-      b_cla = 32'h00000000;
+      rd_data_signal = $signed(rs1) >>> imm_i[4:0];
       we_signal = 1'b1;
     end
 
@@ -293,59 +287,53 @@ module DatapathSingleCycle (
       a_cla = rs1;
       b_cla = rs2;
       we_signal = 1'b1;
+      rd_data_signal = sum_cla;
     end
 
     if(insn_sub) begin
       a_cla = rs1 ;
       b_cla = ~rs2 + 32'h00000001;
       we_signal = 1'b1;
+      rd_data_signal = sum_cla;
     end
 
     if(insn_sll) begin
-      a_cla = rs1 << rs2[4:0];
-      b_cla = 32'h00000000;
+      rd_data_signal = rs1 << rs2[4:0];
       we_signal = 1'b1;
     end
     
     if(insn_slt) begin
-      a_cla = (rs1 < $signed(rs2)) ? 32'h00000001 : 32'h00000000;
-      b_cla = 32'h00000000;
+      rd_data_signal = ($signed(rs1) < $signed(rs2)) ? 32'h00000001 : 32'h00000000;
       we_signal = 1'b1;
     end
 
     if(insn_sltu) begin
-      a_cla = (rs1 < $unsigned(rs2)) ? 32'h00000001 : 32'h00000000;
-      b_cla = 32'h00000000;
+      rd_data_signal = ($unsigned(rs1) < $unsigned(rs2)) ? 32'h00000001 : 32'h00000000;
       we_signal = 1'b1;
     end
 
     if(insn_xor) begin
-      a_cla = rs1 ^ rs2;
-      b_cla = 32'h00000000;
+      rd_data_signal = rs1 ^ rs2;
       we_signal = 1'b1;
     end
 
     if(insn_srl) begin
-      a_cla = rs1 >> rs2[4:0];
-      b_cla = 32'h00000000;
+      rd_data_signal = rs1 >> rs2[4:0];
       we_signal = 1'b1;
     end
 
     if(insn_sra) begin
-      a_cla = rs1 >>> rs2[4:0];
-      b_cla = 32'h00000000;
+      rd_data_signal = $signed(rs1) >>> rs2[4:0];
       we_signal = 1'b1;
     end
 
     if(insn_or) begin
-      a_cla = rs1 | rs2;
-      b_cla = 32'h00000000;
+      rd_data_signal = rs1 | rs2;
       we_signal = 1'b1;
     end
 
     if(insn_and) begin
-      a_cla = rs1 & rs2;
-      b_cla = 32'h00000000;
+      rd_data_signal = rs1 & rs2;
       we_signal = 1'b1;
     end
 
@@ -353,70 +341,51 @@ module DatapathSingleCycle (
 
     if(insn_beq) begin
       if(rs1==rs2) begin
-        pcNext = pcCurrent + {{19{imm_b[11]}}, imm_b[11:0], 1'b0};
+        pcNext = pcCurrent + imm_b_sext;
       end
     end
 
     if(insn_bne) begin
       if(rs1!=rs2) begin
-<<<<<<< HEAD
-        pcNext = pcCurrent + {{19{imm_b[11]}}, imm_b[11:0], 1'b0};
-=======
-        pcNext = pcCurrent + {{19{imm_b[11]}}, imm_b[11:0], 1'b0};    
->>>>>>> dd23e821386856cf554b433411336c5727f074f7
+        pcNext = pcCurrent + imm_b_sext;
       end
     end
 
     if(insn_blt) begin
-<<<<<<< HEAD
       if($signed(rs1) < $signed(rs2)) begin
-=======
-      if(rs1 < $signed(rs2)) begin
->>>>>>> dd23e821386856cf554b433411336c5727f074f7
-        pcNext = pcCurrent + {{19{imm_b[11]}}, imm_b[11:0], 1'b0};    
+        pcNext = pcCurrent + imm_b_sext;    
       end
     end
 
     if(insn_bge) begin
-<<<<<<< HEAD
       if($signed(rs1) >= $signed(rs2)) begin
-=======
-      if(rs1 >= $signed(rs2)) begin
->>>>>>> dd23e821386856cf554b433411336c5727f074f7
-        pcNext = pcCurrent + {{19{imm_b[11]}}, imm_b[11:0], 1'b0};    
+        pcNext = pcCurrent + imm_b_sext;    
       end
     end
 
     if(insn_bltu) begin
       if(rs1 < $unsigned(rs2)) begin
-        pcNext = pcCurrent + {{19{imm_b[11]}}, imm_b[11:0], 1'b0};
+        pcNext = pcCurrent + imm_b_sext;
       end
     end
 
     if(insn_bgeu) begin
       if(rs1 >= $unsigned(rs2)) begin
-        pcNext = pcCurrent + {{19{imm_b[11]}}, imm_b[11:0], 1'b0};    
+        pcNext = pcCurrent + imm_b_sext;    
       end
     end
 
-<<<<<<< HEAD
-=======
     if(insn_ecall) begin
       halt = 1'b1;
     end 
->>>>>>> dd23e821386856cf554b433411336c5727f074f7
-
   end
-    
-  logic [31:0] rd_data_signal;
-  logic [31:0] rs1,rs2;
-  logic we_signal;
+  
 
   cla addi_instance(
         .a(a_cla),
         .b(b_cla),
         .cin(1'b0),
-        .sum(rd_data_signal)
+        .sum(sum_cla)
   );
 
   RegFile rf (
@@ -430,11 +399,6 @@ module DatapathSingleCycle (
       .we(we_signal),
       .rst(rst)
   );
-<<<<<<< HEAD
-
-
-=======
->>>>>>> dd23e821386856cf554b433411336c5727f074f7
 
 endmodule
 
