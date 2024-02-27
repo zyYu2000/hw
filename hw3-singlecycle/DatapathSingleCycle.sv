@@ -7,7 +7,7 @@
 `define OPCODE_SIZE 6:0
 
 `include "../hw2a/divider_unsigned.sv"
-`include "/home/penn/hw/hw/hw2b/cla.sv"
+`include "../hw2b/cla.sv"
 
 module RegFile (
     input logic [4:0] rd,
@@ -209,8 +209,11 @@ module DatapathSingleCycle (
   logic illegal_insn;
   logic [31:0] sum_output, a_cla, b_cla,sum_cla;
   logic [31:0] rd_data_signal;
-  logic [31:0] rs1,rs2;
+  logic [31:0] rs1,rs2,address_load;
   logic we_signal;
+  logic [63:0] mul_1,mul_2,mul_3,mul_4;
+  logic [31:0] dividend, divisor,remainder,quotient;
+  logic [31:0] sign_bit, xor_mask, load_data;
 
   always_comb begin
     illegal_insn = 1'b0;
@@ -219,8 +222,15 @@ module DatapathSingleCycle (
     a_cla = 32'h000000000;
     b_cla = 32'h000000000;
     rd_data_signal = 32'h000000000;
-   
-
+    mul_1 = 64'h000000000;
+    mul_2 = 64'h000000000;
+    mul_3 = 64'h000000000;
+    mul_4 = 64'h000000000;
+    divisor = 32'h000000000;
+    dividend = 32'h000000000;
+    address_load = 32'h000000000;
+    load_data = 32'h00000000;
+    
     case (insn_opcode)
       OpLui: begin
         // TODO: start here by implementing lui
@@ -229,12 +239,18 @@ module DatapathSingleCycle (
       end
       OpAuipc: begin
         we_signal = 1'b1;
-        rd_data_signal = pcCurrent + {imm_u, 12'h0};     //pc + (imm20 << 12)
+        rd_data_signal = pcCurrent + {imm_u[19:0], 12'h000};     
       end
+
+      OpMiscMem: begin
+      
+      end
+
       default: begin
         illegal_insn = 1'b1;
       end
     endcase
+
     
     if (insn_addi) begin
       a_cla = rs1;
@@ -337,6 +353,91 @@ module DatapathSingleCycle (
       we_signal = 1'b1;
     end
 
+    if (insn_lb) begin  
+        address_load = rs1 + imm_i_sext;     
+          case (address_load[1:0])     
+          2'b00:  rd_data_signal = {{24{load_data_from_dmem[7]}}, load_data_from_dmem[7:0]};
+          2'b01:  rd_data_signal = {{24{load_data_from_dmem[15]}}, load_data_from_dmem[15:8]};
+          2'b10:  rd_data_signal = {{24{load_data_from_dmem[23]}}, load_data_from_dmem[23:16]};
+          2'b11:  rd_data_signal = {{24{load_data_from_dmem[31]}}, load_data_from_dmem[31:24]};
+          endcase
+          we_signal = 1'b1;
+        end 
+    if (insn_lh) begin     
+          address_load = rs1 + imm_i_sext;
+
+          case (address_load[1])       
+          1'b0:  rd_data_signal = {{16{load_data_from_dmem[15]}}, load_data_from_dmem[0 +: 16]};
+          1'b1:  rd_data_signal = {{16{load_data_from_dmem[31]}}, load_data_from_dmem[16 +: 16]};
+          endcase
+          we_signal = 1'b1;
+        end 
+    if (insn_lw) begin     
+          address_load = rs1 + imm_i_sext;    
+
+          rd_data_signal = load_data_from_dmem;   
+          we_signal = 1'b1;
+        end 
+    if (insn_lbu) begin   
+          address_load = rs1 + imm_i_sext;
+          case (address_load[1:0])    
+          2'b00:  rd_data_signal = {24'b0, load_data_from_dmem[0 +: 8]};
+          2'b01:  rd_data_signal = {24'b0, load_data_from_dmem[8 +: 8]};
+          2'b10:  rd_data_signal = {24'b0, load_data_from_dmem[16 +: 8]};
+          2'b11:  rd_data_signal = {24'b0, load_data_from_dmem[24 +: 8]};
+          endcase
+          we_signal = 1'b1;
+        end 
+    if (insn_lhu) begin   
+          address_load = rs1 + imm_i_sext;
+          case (address_load[1])      
+          1'b0:  rd_data_signal = {16'b0, load_data_from_dmem[0 +: 16]};
+          1'b1:  rd_data_signal = {16'b0, load_data_from_dmem[16 +: 16]};
+          endcase
+          we_signal = 1'b1;
+        end
+    if (insn_sb) begin              //sb
+          address_load = rs1 + imm_s_sext;
+          
+          case (address_load[1:0])
+          2'b00: begin  store_data_to_dmem[0 +: 8] = rs2[7:0]; store_we_to_dmem = 4'b0001;  end
+          2'b01: begin  store_data_to_dmem[8 +: 8] = rs2[7:0]; store_we_to_dmem = 4'b0010;  end
+          2'b10: begin  store_data_to_dmem[16 +: 8] = rs2[7:0]; store_we_to_dmem = 4'b0100;  end
+          2'b11: begin  store_data_to_dmem[24 +: 8] = rs2[7:0]; store_we_to_dmem = 4'b1000;  end
+          endcase
+        end 
+    if (insn_sh) begin     //sh
+          address_load = rs1 + imm_s_sext;
+
+          case (address_load[1])
+          1'b0:begin  store_data_to_dmem[0 +: 16] = rs2[15:0]; store_we_to_dmem = 4'b0011;  end
+          1'b1:begin  store_data_to_dmem[16 +: 16] = rs2[15:0]; store_we_to_dmem = 4'b1100;  end
+          endcase
+        end 
+    if (insn_sw) begin     //sw
+          address_load = rs1 + imm_s_sext;
+
+          store_data_to_dmem = rs2;
+          store_we_to_dmem = 4'b1111;
+        end
+
+    
+
+    if(insn_jal) begin                    
+        rd_data_signal = pcCurrent + 'd4;
+
+        pcNext = pcCurrent + imm_j_sext;
+        we_signal = 1'b1;
+      end
+
+    if(insn_jalr )begin                    
+        rd_data_signal = pcCurrent + 'd4;
+        pcNext = (rs1 + imm_i_sext) & ~1;
+        we_signal = 1'b1; 
+
+      end
+    
+
     pcNext = pcCurrent + 32'd4;
 
     if(insn_beq) begin
@@ -377,8 +478,77 @@ module DatapathSingleCycle (
 
     if(insn_ecall) begin
       halt = 1'b1;
-    end 
+    end
+
+    
+
+    if(insn_mul) begin
+     
+      mul_1 = (rs1 * rs2);
+      rd_data_signal = mul_1[31:0];
+      we_signal = 1'b1;
+    end
+
+    if(insn_mulh) begin
+      mul_2 = {{32{rs1[31]}}, rs1} * {{32{rs2[31]}}, rs2};
+      rd_data_signal = mul_2[63:32];
+      we_signal = 1'b1;
+
+    end
+
+    if(insn_mulhsu) begin
+      mul_3 = {{32{rs1[31]}}, rs1} * {32'b0, rs2};
+      rd_data_signal = mul_3[63:32];
+          
+      we_signal = 1'b1;
+
+    end
+
+    if(insn_mulhu) begin
+      mul_4 = ($unsigned(rs1) * $unsigned(rs2));
+      rd_data_signal = mul_4[63:32];
+      we_signal = 1'b1;
+
+    end
+
+    if(insn_div) begin
+      dividend = rs1;
+      sign_bit = {32{rs2[31]}};
+      xor_mask = rs2 ^ sign_bit;
+      divisor = xor_mask+sign_bit;
+      rd_data_signal = quotient;
+      we_signal = 1'b1;
+
+    end
+
+    if(insn_divu) begin
+      dividend = rs1;
+      divisor = $unsigned(rs2);
+      rd_data_signal = quotient;
+      we_signal = 1'b1;
+    end
+
+    if (insn_rem) begin
+      dividend = rs1;
+      sign_bit = {32{rs2[31]}};
+      xor_mask = rs2 ^ sign_bit;
+      divisor = xor_mask+sign_bit;
+      
+      rd_data_signal = remainder;
+      we_signal = 1'b1;
+
+    end
+
+    if (insn_remu) begin
+      dividend = rs1;
+      divisor = $unsigned(rs2);
+      rd_data_signal = remainder;
+      we_signal = 1'b1;
+    end
+
   end
+
+
   
 
   cla addi_instance(
@@ -388,6 +558,12 @@ module DatapathSingleCycle (
         .sum(sum_cla)
   );
 
+  divider_unsigned u_divider(
+    .i_dividend  ( dividend  ),
+    .i_divisor   ( divisor   ),
+    .o_remainder ( remainder ),
+    .o_quotient  ( quotient  )
+  );
   RegFile rf (
       .rd(insn_rd),
       .rd_data(rd_data_signal),
