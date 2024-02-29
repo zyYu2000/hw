@@ -39,6 +39,7 @@ module RegFile (
   end
 
   // Continuous assignment for read ports
+  assign regs[0] = 'b0;
   assign rs1_data = regs[rs1];
   assign rs2_data = regs[rs2];
 
@@ -53,8 +54,8 @@ module DatapathSingleCycle (
     // addr_to_dmem is a read-write port
     output wire [`REG_SIZE] addr_to_dmem,
     input logic [`REG_SIZE] load_data_from_dmem,
-    output logic [`REG_SIZE] store_data_to_dmem,
-    output logic [3:0] store_we_to_dmem
+    output wire [`REG_SIZE] store_data_to_dmem,
+    output wire [3:0] store_we_to_dmem
 );
 
   // components of the instruction
@@ -95,6 +96,8 @@ module DatapathSingleCycle (
   wire [`REG_SIZE] imm_b_sext = {{19{imm_b[12]}}, imm_b[12:0]};
   wire [`REG_SIZE] imm_j_sext = {{11{imm_j[20]}}, imm_j[20:0]};
   
+  assign addr_to_dmem = {address_load[31:2], 2'b00}; // for the memory address, need to add 2 zero(s).
+
   // opcodes - see section 19 of RiscV spec
   localparam bit [`OPCODE_SIZE] OpLoad = 7'b00_000_11;
   localparam bit [`OPCODE_SIZE] OpStore = 7'b01_000_11;
@@ -215,6 +218,7 @@ module DatapathSingleCycle (
   logic [31:0] dividend, divisor,remainder,quotient;
   logic [31:0] sign_bit, xor_mask, load_data;
 
+
   always_comb begin
     illegal_insn = 1'b0;
     we_signal = 1'b0;
@@ -230,6 +234,10 @@ module DatapathSingleCycle (
     dividend = 32'h000000000;
     address_load = 32'h000000000;
     load_data = 32'h00000000;
+    store_data_to_dmem = 32'h000000000;
+    store_we_to_dmem = 4'b0000;
+
+    pcNext = pcCurrent + 32'd4; 
     
     case (insn_opcode)
       OpLui: begin
@@ -241,312 +249,332 @@ module DatapathSingleCycle (
         we_signal = 1'b1;
         rd_data_signal = pcCurrent + {imm_u[19:0], 12'h000};     
       end
+      OpRegImm: begin
+        if (insn_addi) begin
+          a_cla = rs1;
+          b_cla = imm_i_sext;
+          we_signal = 1'b1;
+          rd_data_signal = sum_cla;
+          end
 
-      OpMiscMem: begin
+        if(insn_slti) begin
+          rd_data_signal = ($signed(rs1) < $signed(imm_i_sext)) ? 32'h00000001 : 32'h00000000;
+          we_signal = 1'b1;
+        end
+
+        if(insn_sltiu) begin
+          rd_data_signal = ($unsigned(rs1) < $unsigned(imm_i_sext)) ? 32'h00000001 : 32'h00000000;
+          we_signal = 1'b1;
+        end
+
+        if(insn_xori) begin
+          rd_data_signal = rs1^imm_i_sext;
+          we_signal = 1'b1;
+        end
+
+        if(insn_ori) begin
+          rd_data_signal = rs1|imm_i_sext;
+          we_signal = 1'b1;
+        end
+
+        if(insn_andi) begin
+          rd_data_signal = rs1 & imm_i_sext;
+          we_signal = 1'b1;
+        end
+
+        if(insn_slli) begin
+          rd_data_signal = rs1 << imm_i[4:0];
+          we_signal = 1'b1;
+        end
+
+        if(insn_srli) begin
+          rd_data_signal = rs1 >> imm_i[4:0];
+          we_signal = 1'b1;
+        end
+
+        if(insn_srai) begin
+          rd_data_signal = $signed(rs1) >>> imm_i[4:0];
+          we_signal = 1'b1;
+        end
+      end
       
+      OpRegReg: begin
+        if(insn_add) begin
+        a_cla = rs1;
+        b_cla = rs2;
+        we_signal = 1'b1;
+        rd_data_signal = sum_cla;
+        end
+
+        if(insn_sub) begin
+          a_cla = rs1 ;
+          b_cla = ~rs2 + 32'h00000001;
+          we_signal = 1'b1;
+          rd_data_signal = sum_cla;
+        end
+
+        if(insn_sll) begin
+          rd_data_signal = rs1 << rs2[4:0];
+          we_signal = 1'b1;
+        end
+        
+        if(insn_slt) begin
+          rd_data_signal = ($signed(rs1) < $signed(rs2)) ? 32'h00000001 : 32'h00000000;
+          we_signal = 1'b1;
+        end
+
+        if(insn_sltu) begin
+          rd_data_signal = ($unsigned(rs1) < $unsigned(rs2)) ? 32'h00000001 : 32'h00000000;
+          we_signal = 1'b1;
+        end
+
+        if(insn_xor) begin
+          rd_data_signal = rs1 ^ rs2;
+          we_signal = 1'b1;
+        end
+
+        if(insn_srl) begin
+          rd_data_signal = rs1 >> rs2[4:0];
+          we_signal = 1'b1;
+        end
+
+        if(insn_sra) begin
+          rd_data_signal = $signed(rs1) >>> rs2[4:0];
+          we_signal = 1'b1;
+        end
+
+        if(insn_or) begin
+          rd_data_signal = rs1 | rs2;
+          we_signal = 1'b1;
+        end
+
+        if(insn_and) begin
+          rd_data_signal = rs1 & rs2;
+          we_signal = 1'b1;
+        end
+
+        if(insn_mul) begin
+          mul_1 = (rs1 * rs2);
+          rd_data_signal = mul_1[31:0];
+          we_signal = 1'b1;
+        end
+
+        if(insn_mulh) begin
+          mul_2 = {{32{rs1[31]}}, rs1} * {{32{rs2[31]}}, rs2};
+          rd_data_signal = mul_2[63:32];
+          we_signal = 1'b1;
+        end
+
+        if(insn_mulhsu) begin
+          mul_3 = {{32{rs1[31]}}, rs1} * {32'b0, rs2};
+          rd_data_signal = mul_3[63:32];
+              
+          we_signal = 1'b1;
+        end
+
+        if(insn_mulhu) begin
+          mul_4 = ($unsigned(rs1) * $unsigned(rs2));
+          rd_data_signal = mul_4[63:32];
+          we_signal = 1'b1;
+
+        end
+
+        if(insn_div) begin
+          
+          
+          if (rs1[31])
+            dividend = ~rs1 + 1;
+          else
+            dividend = rs1;
+          if (rs2[31])
+            divisor = ~rs2 + 1;
+          else
+            divisor = rs2;
+
+          if ((rs1[31] ~^ rs2[31]) || (rs2 == 'd0))
+            rd_data_signal = quotient;          
+          else
+            rd_data_signal = ~quotient + 'd1;
+            we_signal = 1'b1;
+
+        end
+
+        if(insn_divu) begin
+          dividend = rs1;
+          divisor = $unsigned(rs2);
+          rd_data_signal = quotient;
+          we_signal = 1'b1;
+        end
+
+        if (insn_rem) begin
+          if (rs1[31])
+            dividend = ~rs1 + 1;
+          else
+            dividend = rs1;
+          if (rs2[31])
+            divisor = ~rs2 + 1;
+          else
+            divisor = rs2;
+          if (rs1[31])
+            rd_data_signal = ~remainder + 'd1;
+          else
+            rd_data_signal = remainder;
+          we_signal = 1'b1;
+
+        end
+
+        if (insn_remu) begin
+          dividend = rs1;
+          divisor = $unsigned(rs2);
+          rd_data_signal = remainder;
+          we_signal = 1'b1;
+        end
       end
 
+    
+      OpLoad: begin
+        if (insn_lb) begin  
+          address_load = rs1 + imm_i_sext;     
+          case (address_load[1:0])     
+            2'b00:  rd_data_signal = {{24{load_data_from_dmem[7]}}, load_data_from_dmem[7:0]};
+            2'b01:  rd_data_signal = {{24{load_data_from_dmem[15]}}, load_data_from_dmem[15:8]};
+            2'b10:  rd_data_signal = {{24{load_data_from_dmem[23]}}, load_data_from_dmem[23:16]};
+            2'b11:  rd_data_signal = {{24{load_data_from_dmem[31]}}, load_data_from_dmem[31:24]};
+          endcase
+          we_signal = 1'b1;
+        end 
+        if (insn_lh) begin     
+            address_load = rs1 + imm_i_sext;
+
+            case (address_load[1])       
+            1'b0:  rd_data_signal = {{16{load_data_from_dmem[15]}}, load_data_from_dmem[15:0]};
+            1'b1:  rd_data_signal = {{16{load_data_from_dmem[31]}}, load_data_from_dmem[31:16]};
+            endcase
+            we_signal = 1'b1;
+          end 
+        if (insn_lw) begin     
+            address_load = rs1 + imm_i_sext;    
+
+            rd_data_signal = load_data_from_dmem;   
+            we_signal = 1'b1;
+          end 
+        if (insn_lbu) begin   
+            address_load = rs1 + imm_i_sext;
+            case (address_load[1:0])    
+            2'b00:  rd_data_signal = {24'b0, load_data_from_dmem[7:0]};
+            2'b01:  rd_data_signal = {24'b0, load_data_from_dmem[15:8]};
+            2'b10:  rd_data_signal = {24'b0, load_data_from_dmem[23:16]};
+            2'b11:  rd_data_signal = {24'b0, load_data_from_dmem[31:24]};
+            endcase
+            we_signal = 1'b1;
+          end 
+        if (insn_lhu) begin   
+            address_load = rs1 + imm_i_sext;
+            case (address_load[1])      
+            1'b0:  rd_data_signal = {16'b0, load_data_from_dmem[15:0]};
+            1'b1:  rd_data_signal = {16'b0, load_data_from_dmem[31:16]};
+            endcase
+            we_signal = 1'b1;
+          end
+      end
+    
+      OpStore:begin
+        if (insn_sb) begin              //sb
+          address_load = rs1 + imm_s_sext;
+          case (address_load[1:0])
+          2'b00: begin  store_data_to_dmem[7:0] = rs2[7:0]; store_we_to_dmem = 4'b0001;  end
+          2'b01: begin  store_data_to_dmem[15:8] = rs2[7:0]; store_we_to_dmem = 4'b0010;  end
+          2'b10: begin  store_data_to_dmem[23:16] = rs2[7:0]; store_we_to_dmem = 4'b0100;  end
+          2'b11: begin  store_data_to_dmem[31:24] = rs2[7:0]; store_we_to_dmem = 4'b1000;  end
+          endcase
+        end 
+        if (insn_sh) begin     //sh
+          address_load = rs1 + imm_s_sext;
+          case (address_load[1])
+            1'b0:begin  store_data_to_dmem[15:0] = rs2[15:0]; store_we_to_dmem = 4'b0011;  end
+            1'b1:begin  store_data_to_dmem[31:16] = rs2[15:0]; store_we_to_dmem = 4'b1100;  end
+          endcase
+        end 
+        if (insn_sw) begin     //sw
+          address_load = rs1 + imm_s_sext;
+          store_data_to_dmem = rs2;
+          store_we_to_dmem = 4'b1111;
+        end
+      end
+
+      OpJal: begin 
+        if(insn_jal) begin                   
+          rd_data_signal = pcCurrent + 32'd4;
+          pcNext = pcCurrent + imm_j_sext;
+          we_signal = 1'b1;
+        end
+      end
+      OpJalr:begin 
+        if(insn_jalr)  begin                
+          rd_data_signal = pcCurrent + 32'd4;
+          pcNext = (rs1 + imm_i_sext) & ~1;
+          we_signal = 1'b1; 
+        end
+      end
+
+  
+
+      OpBranch:begin
+        if(insn_beq) begin
+          if(rs1==rs2) begin
+            pcNext = pcCurrent + imm_b_sext;
+          end
+        end
+
+        if(insn_bne) begin
+          if(rs1!=rs2) begin
+            pcNext = pcCurrent + imm_b_sext;
+          end
+        end
+
+        if(insn_blt) begin
+          if($signed(rs1) < $signed(rs2)) begin
+            pcNext = pcCurrent + imm_b_sext;    
+          end
+        end
+
+        if(insn_bge) begin
+          if($signed(rs1) >= $signed(rs2)) begin
+            pcNext = pcCurrent + imm_b_sext;    
+          end
+        end
+
+        if(insn_bltu) begin
+          if(rs1 < $unsigned(rs2)) begin
+            pcNext = pcCurrent + imm_b_sext;
+          end
+        end
+
+        if(insn_bgeu) begin
+          if(rs1 >= $unsigned(rs2)) begin
+            pcNext = pcCurrent + imm_b_sext;    
+          end
+        end
+      end
+
+      OpEnviron: begin 
+        if(insn_ecall) begin
+          halt = 1'b1;
+        end
+      end
+
+      OpMiscMem: begin
+
+      end
+  
       default: begin
         illegal_insn = 1'b1;
       end
     endcase
 
-    
-    if (insn_addi) begin
-      a_cla = rs1;
-      b_cla = imm_i_sext;
-      we_signal = 1'b1;
-      rd_data_signal = sum_cla;
-    end
-
-    if(insn_slti) begin
-      rd_data_signal = ($signed(rs1) < $signed(imm_i_sext)) ? 32'h00000001 : 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_sltiu) begin
-      rd_data_signal = ($unsigned(rs1) < $unsigned(imm_i_sext)) ? 32'h00000001 : 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_xori) begin
-      rd_data_signal = rs1^imm_i_sext;
-      we_signal = 1'b1;
-    end
-
-    if(insn_ori) begin
-      rd_data_signal = rs1|imm_i_sext;
-      we_signal = 1'b1;
-    end
-
-    if(insn_andi) begin
-      rd_data_signal = rs1 & imm_i_sext;
-      we_signal = 1'b1;
-    end
-
-    if(insn_slli) begin
-      rd_data_signal = rs1 << imm_i[4:0];
-      we_signal = 1'b1;
-    end
-
-    if(insn_srli) begin
-      rd_data_signal = rs1 >> imm_i[4:0];
-      we_signal = 1'b1;
-    end
-
-    if(insn_srai) begin
-      rd_data_signal = $signed(rs1) >>> imm_i[4:0];
-      we_signal = 1'b1;
-    end
-
-    if(insn_add) begin
-      a_cla = rs1;
-      b_cla = rs2;
-      we_signal = 1'b1;
-      rd_data_signal = sum_cla;
-    end
-
-    if(insn_sub) begin
-      a_cla = rs1 ;
-      b_cla = ~rs2 + 32'h00000001;
-      we_signal = 1'b1;
-      rd_data_signal = sum_cla;
-    end
-
-    if(insn_sll) begin
-      rd_data_signal = rs1 << rs2[4:0];
-      we_signal = 1'b1;
-    end
-    
-    if(insn_slt) begin
-      rd_data_signal = ($signed(rs1) < $signed(rs2)) ? 32'h00000001 : 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_sltu) begin
-      rd_data_signal = ($unsigned(rs1) < $unsigned(rs2)) ? 32'h00000001 : 32'h00000000;
-      we_signal = 1'b1;
-    end
-
-    if(insn_xor) begin
-      rd_data_signal = rs1 ^ rs2;
-      we_signal = 1'b1;
-    end
-
-    if(insn_srl) begin
-      rd_data_signal = rs1 >> rs2[4:0];
-      we_signal = 1'b1;
-    end
-
-    if(insn_sra) begin
-      rd_data_signal = $signed(rs1) >>> rs2[4:0];
-      we_signal = 1'b1;
-    end
-
-    if(insn_or) begin
-      rd_data_signal = rs1 | rs2;
-      we_signal = 1'b1;
-    end
-
-    if(insn_and) begin
-      rd_data_signal = rs1 & rs2;
-      we_signal = 1'b1;
-    end
-
-    if (insn_lb) begin  
-        address_load = rs1 + imm_i_sext;     
-          case (address_load[1:0])     
-          2'b00:  rd_data_signal = {{24{load_data_from_dmem[7]}}, load_data_from_dmem[7:0]};
-          2'b01:  rd_data_signal = {{24{load_data_from_dmem[15]}}, load_data_from_dmem[15:8]};
-          2'b10:  rd_data_signal = {{24{load_data_from_dmem[23]}}, load_data_from_dmem[23:16]};
-          2'b11:  rd_data_signal = {{24{load_data_from_dmem[31]}}, load_data_from_dmem[31:24]};
-          endcase
-          we_signal = 1'b1;
-        end 
-    if (insn_lh) begin     
-          address_load = rs1 + imm_i_sext;
-
-          case (address_load[1])       
-          1'b0:  rd_data_signal = {{16{load_data_from_dmem[15]}}, load_data_from_dmem[0 +: 16]};
-          1'b1:  rd_data_signal = {{16{load_data_from_dmem[31]}}, load_data_from_dmem[16 +: 16]};
-          endcase
-          we_signal = 1'b1;
-        end 
-    if (insn_lw) begin     
-          address_load = rs1 + imm_i_sext;    
-
-          rd_data_signal = load_data_from_dmem;   
-          we_signal = 1'b1;
-        end 
-    if (insn_lbu) begin   
-          address_load = rs1 + imm_i_sext;
-          case (address_load[1:0])    
-          2'b00:  rd_data_signal = {24'b0, load_data_from_dmem[0 +: 8]};
-          2'b01:  rd_data_signal = {24'b0, load_data_from_dmem[8 +: 8]};
-          2'b10:  rd_data_signal = {24'b0, load_data_from_dmem[16 +: 8]};
-          2'b11:  rd_data_signal = {24'b0, load_data_from_dmem[24 +: 8]};
-          endcase
-          we_signal = 1'b1;
-        end 
-    if (insn_lhu) begin   
-          address_load = rs1 + imm_i_sext;
-          case (address_load[1])      
-          1'b0:  rd_data_signal = {16'b0, load_data_from_dmem[0 +: 16]};
-          1'b1:  rd_data_signal = {16'b0, load_data_from_dmem[16 +: 16]};
-          endcase
-          we_signal = 1'b1;
-        end
-    if (insn_sb) begin              //sb
-          address_load = rs1 + imm_s_sext;
-          
-          case (address_load[1:0])
-          2'b00: begin  store_data_to_dmem[0 +: 8] = rs2[7:0]; store_we_to_dmem = 4'b0001;  end
-          2'b01: begin  store_data_to_dmem[8 +: 8] = rs2[7:0]; store_we_to_dmem = 4'b0010;  end
-          2'b10: begin  store_data_to_dmem[16 +: 8] = rs2[7:0]; store_we_to_dmem = 4'b0100;  end
-          2'b11: begin  store_data_to_dmem[24 +: 8] = rs2[7:0]; store_we_to_dmem = 4'b1000;  end
-          endcase
-        end 
-    if (insn_sh) begin     //sh
-          address_load = rs1 + imm_s_sext;
-
-          case (address_load[1])
-          1'b0:begin  store_data_to_dmem[0 +: 16] = rs2[15:0]; store_we_to_dmem = 4'b0011;  end
-          1'b1:begin  store_data_to_dmem[16 +: 16] = rs2[15:0]; store_we_to_dmem = 4'b1100;  end
-          endcase
-        end 
-    if (insn_sw) begin     //sw
-          address_load = rs1 + imm_s_sext;
-
-          store_data_to_dmem = rs2;
-          store_we_to_dmem = 4'b1111;
-        end
-
-    
-
-    if(insn_jal) begin                    
-        rd_data_signal = pcCurrent + 'd4;
-
-        pcNext = pcCurrent + imm_j_sext;
-        we_signal = 1'b1;
-      end
-
-    if(insn_jalr )begin                    
-        rd_data_signal = pcCurrent + 'd4;
-        pcNext = (rs1 + imm_i_sext) & ~1;
-        we_signal = 1'b1; 
-
-      end
-    
-
-    pcNext = pcCurrent + 32'd4;
-
-    if(insn_beq) begin
-      if(rs1==rs2) begin
-        pcNext = pcCurrent + imm_b_sext;
-      end
-    end
-
-    if(insn_bne) begin
-      if(rs1!=rs2) begin
-        pcNext = pcCurrent + imm_b_sext;
-      end
-    end
-
-    if(insn_blt) begin
-      if($signed(rs1) < $signed(rs2)) begin
-        pcNext = pcCurrent + imm_b_sext;    
-      end
-    end
-
-    if(insn_bge) begin
-      if($signed(rs1) >= $signed(rs2)) begin
-        pcNext = pcCurrent + imm_b_sext;    
-      end
-    end
-
-    if(insn_bltu) begin
-      if(rs1 < $unsigned(rs2)) begin
-        pcNext = pcCurrent + imm_b_sext;
-      end
-    end
-
-    if(insn_bgeu) begin
-      if(rs1 >= $unsigned(rs2)) begin
-        pcNext = pcCurrent + imm_b_sext;    
-      end
-    end
-
-    if(insn_ecall) begin
-      halt = 1'b1;
-    end
-
-    
-
-    if(insn_mul) begin
-     
-      mul_1 = (rs1 * rs2);
-      rd_data_signal = mul_1[31:0];
-      we_signal = 1'b1;
-    end
-
-    if(insn_mulh) begin
-      mul_2 = {{32{rs1[31]}}, rs1} * {{32{rs2[31]}}, rs2};
-      rd_data_signal = mul_2[63:32];
-      we_signal = 1'b1;
-
-    end
-
-    if(insn_mulhsu) begin
-      mul_3 = {{32{rs1[31]}}, rs1} * {32'b0, rs2};
-      rd_data_signal = mul_3[63:32];
-          
-      we_signal = 1'b1;
-
-    end
-
-    if(insn_mulhu) begin
-      mul_4 = ($unsigned(rs1) * $unsigned(rs2));
-      rd_data_signal = mul_4[63:32];
-      we_signal = 1'b1;
-
-    end
-
-    if(insn_div) begin
-      dividend = rs1;
-      sign_bit = {32{rs2[31]}};
-      xor_mask = rs2 ^ sign_bit;
-      divisor = xor_mask+sign_bit;
-      rd_data_signal = quotient;
-      we_signal = 1'b1;
-
-    end
-
-    if(insn_divu) begin
-      dividend = rs1;
-      divisor = $unsigned(rs2);
-      rd_data_signal = quotient;
-      we_signal = 1'b1;
-    end
-
-    if (insn_rem) begin
-      dividend = rs1;
-      sign_bit = {32{rs2[31]}};
-      xor_mask = rs2 ^ sign_bit;
-      divisor = xor_mask+sign_bit;
-      
-      rd_data_signal = remainder;
-      we_signal = 1'b1;
-
-    end
-
-    if (insn_remu) begin
-      dividend = rs1;
-      divisor = $unsigned(rs2);
-      rd_data_signal = remainder;
-      we_signal = 1'b1;
-    end
-
+ 
   end
+
 
 
   
