@@ -116,7 +116,7 @@ module MemoryAxiLite #(
   localparam int AddrLsb = 2;
 
   // [BR]RESP codes, from Section A 3.4.4 of AXI4 spec
-  localparam bit [1:0] ResponseOkay = 2'b00;
+  // localparam bit [1:0] ResponseOkay = 2'b00;
   // localparam bit [1:0] ResponseSubordinateError = 2'b10;
   // localparam bit [1:0] ResponseDecodeError = 2'b11;
 
@@ -135,113 +135,6 @@ module MemoryAxiLite #(
 
   // TODO: changes will be needed throughout this module
 
-// always_ff @(posedge axi.ACLK) begin
-//     if (!axi.ARESETn) begin
-//       // start out ready to accept incoming reads
-//       insn.ARREADY <= 1;
-//       data.ARREADY <= 1;
-//       // start out ready to accept an incoming write
-//       data.AWREADY <= 1;
-//       data.WREADY <= 1;
-//       insn.AWREADY <= 1;
-//       insn.WREADY <= 1;
-
-//       // set all slave valid signal to 0
-//       insn.RVALID <= 1'b0;
-//       insn.BVALID <= 1'b0;
-//       data.RVALID <= 1'b0;
-//       data.BVALID <= 1'b0;
-
-//       // reponse signal
-//       data.BRESP <= ResponseOkay;
-//       data.RRESP <= ResponseOkay;
-//       insn.BRESP <= ResponseOkay;
-//       insn.RRESP <= ResponseOkay;
-
-//       data.RDATA <= 32'b0;
-//       insn.RDATA <= 32'b0;
-
-//     end else begin
-//       //write request channel
-//       if (data.AWVALID && !data.AWREADY) begin
-//           data.AWREADY <= 1'b1; 
-//       end else if (!data.WVALID) begin
-//           data.AWREADY <= 1'b1;
-//       end
-
-//       if (insn.AWVALID && !insn.AWREADY) begin
-//           insn.AWREADY <= 1'b1; 
-//       end else if (!insn.WVALID) begin
-//           insn.AWREADY <= 1'b1;
-//       end
-            
-//       // Write Data (W) Channel
-//       if (data.WVALID && !data.WREADY) begin
-//           data.WREADY <= 1'b1;
-//           mem_array[data.AWADDR[AddrMsb:AddrLsb]] <= data.WDATA; 
-//       end else if (!data.AWVALID) begin
-//           data.WREADY <= 1'b1;
-//       end
-
-//       if (insn.WVALID && !insn.WREADY) begin
-//           insn.WREADY <= 1'b1;
-//           mem_array[insn.AWADDR[AddrMsb:AddrLsb]] <= insn.WDATA; 
-//       end else if (!insn.AWVALID) begin
-//           insn.WREADY <= 1'b1;
-//       end
-
-
-//       // Write Response (B) Channel
-//       if (data.AWREADY && data.WREADY && data.AWVALID && data.WVALID) begin
-//           mem_array[data.AWADDR[AddrMsb:AddrLsb]] <= data.WDATA;
-//           data.AWREADY <= 1'b1;
-//           data.WREADY  <= 1'b1;
-//           data.BVALID  <= 1'b1;
-//       end else if (data.BREADY && data.BVALID) begin
-//           data.BVALID <= 1'b0;
-//       end
-
-//       if (insn.AWREADY && insn.WREADY && insn.AWVALID && insn.WVALID) begin
-//           mem_array[insn.AWADDR[AddrMsb:AddrLsb]] <= insn.WDATA;
-//           insn.AWREADY <= 1'b1;
-//           insn.WREADY  <= 1'b1;
-//           insn.BVALID  <= 1'b1;
-//       end else if (insn.BREADY && insn.BVALID) begin
-//           insn.BVALID <= 1'b0;
-//       end
-
-
-
-//             // Read request (AR) //TODO: ARREADY needs more factors
-//       if (!insn.ARREADY) begin
-//           insn.ARREADY <= 1'b1;
-//       end 
-
-//       if (!data.ARREADY) begin
-//           data.ARREADY <= 1'b1;
-//       end 
-
-//             // Read Data (R)
-//       if(data.ARREADY && data.ARVALID && data.RREADY) begin
-//         data.RVALID <= 1;
-//         data.RDATA <= mem_array[data.ARADDR[AddrMsb:AddrLsb]];
-//         // data.RRESP <= ResponseOkay;
-//       end else if (!data.ARVALID) begin
-//         data.RVALID <= 0;
-//       end
-
-//       if(insn.ARREADY && insn.ARVALID && insn.RREADY) begin
-//         insn.RVALID <= 1;
-//         insn.RDATA <= mem_array[insn.ARADDR[AddrMsb:AddrLsb]];
-//         // insn.RRESP <= ResponseOkay;
-//       end else if (!insn.ARVALID) begin
-//         insn.RVALID <= 0;
-//       end
-
-
-//     end
-//   end
-
 always_ff @(posedge axi.ACLK) begin
     if (!axi.ARESETn) begin
       // start out ready to accept incoming reads
@@ -256,10 +149,10 @@ always_ff @(posedge axi.ACLK) begin
       insn.RVALID  <= 1'b0;
       data.RVALID  <= 1'b0;
       data.BVALID  <= 1'b0;
-      insn.RRESP   <= ResponseOkay;
-      data.RRESP   <= ResponseOkay;
-      data.BRESP   <= ResponseOkay;
-      insn.BRESP   <= ResponseOkay;
+      // insn.RRESP   <= ResponseOkay;
+      // data.RRESP   <= ResponseOkay;
+      // data.BRESP   <= ResponseOkay;
+      // insn.BRESP   <= ResponseOkay;
       
     end else begin
       // Write Data (W) Channel
@@ -268,11 +161,9 @@ always_ff @(posedge axi.ACLK) begin
           // Once WVALID goes low, we are no longer ready
       end
 
-      if (insn.WVALID && !insn.WREADY) begin
+      if ((insn.WVALID && !insn.WREADY) | (!insn.AWVALID)) begin
           insn.WREADY <= 1'b1; // Accept write data
-      end else if (!insn.AWVALID) begin
-          insn.WREADY <= 1'b1; // Once WVALID goes low, we are no longer ready
-      end
+      end // Once WVALID goes low, we are no longer ready
 
       // Write Response (B) Channel
       if (data.AWREADY && data.WREADY && data.AWVALID && data.WVALID) begin
